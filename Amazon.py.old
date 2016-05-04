@@ -1,0 +1,90 @@
+﻿from amazonproduct import *
+import sys
+reload(sys)
+sys.setdefaultencoding("utf8")
+class BrowseNode:
+	def __init__(self,id,name,deep):
+		self.NodeID=id
+		self.Name=name
+		self.chName=''
+		self.deep=deep
+		self.Children=[]
+		self.Ancestors=[]
+	def __repr__(self):
+		str='Deep:%d\tID:%d \tName:%s\n' % (self.deep,self.NodeID,self.Name)
+		if self.Children:
+			str+= '\tChildren:['
+			for child in self.Children:
+				str+='%d,'%(child)
+			str=str[:-1]
+			str+=']\n'
+		if self.Ancestors:
+			str+='\tAncestors:['
+			for ancestor in self.Ancestors:
+				str+='%d,'% (ancestor)
+			str=str[:-1]
+			str+=']\n'
+		return str
+mapID={}
+maxDeep=0
+api=API(locale='us',trycount=20)
+def BrowseNodeLookup(nodeID,deep):
+	if maxDeep > 0 and deep >= maxDeep:
+		return
+	try:
+		res=api.browse_node_lookup(nodeID)
+	except:
+		return
+	sleep(0.1)
+	if nodeID not in mapID:
+		mapID[nodeID]=BrowseNode(nodeID,res.BrowseNodes.BrowseNode.Name,deep)
+	else:
+		mapID[nodeID].Name=res.BrowseNodes.BrowseNode.Name
+	if deep == 0 and 'Ancestors' in dir(res.BrowseNodes.BrowseNode) :
+		itRootParent=res.BrowseNodes.BrowseNode.Ancestors.BrowseNode.BrowseNodeId
+		mapID[nodeID].Ancestors.append(itRootParent)
+		mapID[itRootParent]=BrowseNode(itRootParent,res.BrowseNodes.BrowseNode.Ancestors.BrowseNode.Name,-1)
+		#mapID[itRootParent].chName=baidu
+	if 'Children' in dir(res.BrowseNodes.BrowseNode) :
+		for child in res.BrowseNodes.BrowseNode.Children.BrowseNode:
+			idChild=child.BrowseNodeId
+			mapID[nodeID].Children.append(idChild)
+			if idChild in mapID:
+				mapID[idChild].Ancestors.append(nodeID)
+			else:
+				mapID[idChild]=BrowseNode(idChild,child.Name,deep+1)
+				mapID[idChild].Ancestors.append(nodeID)
+				BrowseNodeLookup(idChild,deep+1)
+
+def PrintAll():
+	ks=list(mapID.keys())
+	for key in ks:
+		print mapID[key]
+def SortAll():
+	ks=list(mapID.keys())
+	for key in ks:
+		mapID[key].Ancestors.sort()
+		mapID[key].Children.sort()
+def SaveData(path):
+	output=file(path,'w')
+	output.write('Node Count:%d\n' %len(mapID))
+	ks=list(mapID.keys())
+W	ks.sort()
+W	for key in ks:
+		output.write(mapID[key].__repr__())
+if __name__ == '__main__' :
+	maxDeep=0
+	pathList='D:\\document\\Amazon_RootNode_us.txt'
+	pathOut='D:\\document\\nodelist_us.txt'
+	input=file(pathList,'r')
+	nLineIndex=0
+	try:
+		for line in input.readlines():
+			listLine=line.split('\t')
+			nLineIndex+=1
+			if listLine[0].isdigit():
+				num=int(listLine[0])
+				BrowseNodeLookup(num,0)
+	finally:
+		SortAll()
+		SaveData(pathOut)
